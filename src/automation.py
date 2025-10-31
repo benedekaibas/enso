@@ -4,23 +4,15 @@ import os
 import subprocess
 import shutil 
 
-
-JSON_FILE_PATH = 'data_two.json'
+JSON_FILE_PATH = 'output_two.json'
 OUTPUT_DIRECTORY = 'extracted_python_snippets_two'
 CODE_KEY = 'code'
-OUTER_KEY = 'code_examples' # TODO: check if json outer list is named code_examples or we have to configure this variable
 FILE_EXTENSION = '.py'
 
-
-
-def extractSaveSnippets(jsonPath: str, outputDir: str, outerKey: str, codeKey: str, extension: str) -> list:
-    """
-    Reads a JSON file, extracts code snippets, saves them to individual files, 
-    and returns a list of the created file paths.
-    """
+def extractSaveSnippets(jsonPath: str, outputDir: str, codeKey: str, extension: str) -> list:
+    """Reads a JSON file, extracts code snippets, saves them to individual files."""
     created_files = []
     
-    # load the json and receive its data
     try:
         with open(jsonPath, "r", encoding='utf-8') as fn:
             data = json.load(fn) 
@@ -31,39 +23,25 @@ def extractSaveSnippets(jsonPath: str, outputDir: str, outerKey: str, codeKey: s
         print(f"Error: Could not decode JSON from {jsonPath}")
         return created_files
     
-    # determine if json has dicts containing lists in the inner part
-    # the json is created by pydantic-ai, so the correct prompt is important!
-    if isinstance(data, dict):
-        codeSnippets = data.get(outerKey)
-    elif isinstance(data, list):
+    # Direct array handling for the new JSON format
+    if isinstance(data, list):
         codeSnippets = data
     else: 
-        print(f"Error: Unexpected top-level JSON type: {type(data)}. Expected dict or list.")
+        print(f"Error: Expected JSON array at top level, got {type(data)}")
         return created_files
 
-    # check if the pydantic generated json file's format is correct or not
-    if not isinstance(codeSnippets, list):
-        print(f"Error: Could not find a valid list of snippets. Check if the key '{outerKey}' is correct.")
-        return created_files
-
-    # make sure I have an existing directory for the code snippet outputs
     if os.path.exists(outputDir):
         shutil.rmtree(outputDir) 
     os.makedirs(outputDir)
     
     codeSnippetCount = 0
 
-    # iterate over the code snippets and give them to the output .py files 
     for index, item in enumerate(codeSnippets):
         if isinstance(item, dict) and codeKey in item:
-            snippets = item[codeKey]
-            fileId = index
-            filename = os.path.join(outputDir, f"code_snippet_{fileId}{extension}")
-
+            filename = os.path.join(outputDir, f"code_snippet_{index}{extension}")
             try:
                 with open(filename, "w", encoding='utf-8') as outputFile:
-                    outputFile.write(snippets)
-                
+                    outputFile.write(item[codeKey])
                 codeSnippetCount += 1
                 created_files.append(filename)
             except IOError as e:
@@ -72,19 +50,15 @@ def extractSaveSnippets(jsonPath: str, outputDir: str, outerKey: str, codeKey: s
     print(f"🎉 Successfully extracted {codeSnippetCount} code snippets and saved them to {outputDir}.")
     return created_files
 
-
-
 def runTypeChecker(files_to_check: list):
     """
     Runs a suite of type checkers on a list of specified code files.
     """
     typeCheckers = [
-        ("mypy", ["mypy"]),
-        ("pyright", ["pyright"]),
+        ("mypy", ["mypy"]), 
         ("pyrefly", ["pyrefly", "check"]),
         ("zuban", ["zuban", "check"]),
         ("ty", ["ty", "check"]),
-
     ]
     
     all_results = {} 
@@ -104,13 +78,14 @@ def runTypeChecker(files_to_check: list):
                     command, 
                     capture_output=True, 
                     text=True, 
-                    check=False # checker reports error, but I do not want the script to crash
+                    check=False
                 )
                 
-                status = "PASS" if result.returncode == 0 else "FAIL"
+                output = result.stdout + result.stderr
                 
-                # Check for common failure messages in the output
-                output = result.stdout + result.stderr # combine both stdout and stderr since they are displaying important err messages
+                # SIMPLIFIED: If return code is non-zero, it's a FAIL
+                # Type checkers only return non-zero for actual errors, not warnings
+                status = "PASS" if result.returncode == 0 else "FAIL"
                 
                 file_results[name] = {
                     "status": status,
@@ -132,8 +107,6 @@ def runTypeChecker(files_to_check: list):
     
     return all_results
 
-
-
 def showOutput():
     """
     Summarize the entire process: extraction, checking, and summary.
@@ -143,12 +116,10 @@ def showOutput():
     created_files = extractSaveSnippets(
         jsonPath=JSON_FILE_PATH,
         outputDir=OUTPUT_DIRECTORY,
-        outerKey=OUTER_KEY,
         codeKey=CODE_KEY,
         extension=FILE_EXTENSION
     )
     
-
     if not created_files:
         print("\nProcess aborted: No files were extracted to check.")
         return 1
@@ -179,8 +150,6 @@ def showOutput():
     # print(f"\nCleanup complete. Removed directory: {OUTPUT_DIRECTORY}")
 
     return overall_exit_code
-
-
 
 if __name__ == '__main__':
     final_status = showOutput()

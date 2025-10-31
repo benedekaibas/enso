@@ -19,6 +19,7 @@ class GetAccessToGitHubModels(BaseModel):
         "openai/gpt-4-turbo", 
         "openai/gpt-4o",
         "openai/gpt-4o-mini",
+        "deepseek/DeepSeek-R1",
         "anthropic/claude-3-5-sonnet",
         "anthropic/claude-3-opus",
         "anthropic/claude-3-sonnet",
@@ -297,7 +298,7 @@ if __name__ == "__main__":
         model="openai/gpt-4.1",
         token=token,
         api_base="https://models.github.ai",
-        timeout=120.0,
+        timeout=320.0,
     )
     
     # Handle command line arguments
