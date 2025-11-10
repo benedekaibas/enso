@@ -324,10 +324,16 @@ if __name__ == "__main__":
     print("GENERATED CODE EXAMPLES:")
     print("="*60)
     print(response)
+
 """
 interactive model selection
 python pydantic_better_version.py --interactive
 
 model directly
 python pydantic_better_version.py --model gpt-4-turbo --temperature 0.8
-    """
+
+Current commands setup:
+    1. python codegen.py | python create_json.py 
+    2. python automation.py
+
+"""

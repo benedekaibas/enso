@@ -2,6 +2,8 @@ import subprocess
 import json
 import re
 import sys
+import os
+from datetime import datetime
 
 def extract_code_blocks(text):
     """Extract Python code blocks and metadata from the text."""
@@ -34,7 +36,15 @@ def main():
     
     code_blocks = extract_code_blocks(terminal_output)
     
-    # Output as JSON to stdout with the correct structure
+    # Create dated folder
+    today = datetime.now().strftime("%Y-%m-%d")
+    output_dir = f"output_{today}"
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Output as JSON to file with timestamp
+    timestamp = datetime.now().strftime("%H-%M-%S")
+    output_file = f"{output_dir}/code_examples_{timestamp}.json"
+    
     data = [
         {
             "title": f"Type Checker Divergence {i+1}",
@@ -44,7 +54,13 @@ def main():
         for i, block in enumerate(code_blocks)
     ]
     
-    json.dump(data, sys.stdout, indent=2, ensure_ascii=False)
+    with open(output_file, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    
+    print(f"✅ Saved {len(data)} code examples to: {output_file}")
+    
+    # Also print the file path so automation.py can use it
+    print(f"OUTPUT_FILE:{output_file}")
 
 if __name__ == "__main__":
     main()
