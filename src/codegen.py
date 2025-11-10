@@ -5,10 +5,13 @@ import httpx
 import argparse
 import json
 
+from pydantic_core import Url
+
 class GetAccessToGitHubModels(BaseModel):
     """LLM based agent to send requests to GitHub models."""
+    url: str = "https://models.github.ai"
     model: str = Field(..., description="Model id, e.g. 'openai/gpt-4.1'")
-    api_base: HttpUrl = Field("https://models.github.ai", description="GitHub Models API base")
+    api_base: HttpUrl = Field(HttpUrl(url), description="GitHub Models API base")
     timeout: float = Field(120.0, gt=0, description="Timeout (seconds)")
     token: str = Field(..., description="GitHub PAT with `models:read` scope")
     
@@ -20,6 +23,7 @@ class GetAccessToGitHubModels(BaseModel):
         "openai/gpt-4o",
         "openai/gpt-4o-mini",
         "deepseek/DeepSeek-R1",
+        "deepseek/DeepSeek-R1-0528",
         "anthropic/claude-3-5-sonnet",
         "anthropic/claude-3-opus",
         "anthropic/claude-3-sonnet",
@@ -27,7 +31,7 @@ class GetAccessToGitHubModels(BaseModel):
         "mistralai/codestral-latest",
         "meta/llama-3-70b-instruct",
         "meta/llama-3-8b-instruct",
-        "mistralai/mixtral-8x7b-instruct"
+        "mistralai/mixtral-8x7b-instruct",
     ]
 
     def setup(
@@ -297,7 +301,7 @@ if __name__ == "__main__":
     agent = GetAccessToGitHubModels(
         model="openai/gpt-4.1",
         token=token,
-        api_base="https://models.github.ai",
+        api_base=HttpUrl("https://models.github.ai"),
         timeout=320.0,
     )
     

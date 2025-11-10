@@ -4,8 +4,8 @@ import os
 import subprocess
 import shutil 
 
-JSON_FILE_PATH = 'output_two.json'
-OUTPUT_DIRECTORY = 'extracted_python_snippets_two'
+JSON_FILE_PATH = 'output_three.json'
+OUTPUT_DIRECTORY = 'extracted_python_snippets'
 CODE_KEY = 'code'
 FILE_EXTENSION = '.py'
 
