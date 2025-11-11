@@ -1,11 +1,38 @@
-"""This file contains a code that makes automated process of feeding code examples into type checkers."""
 import json
 import os
 import subprocess
 import shutil 
+import glob
+from datetime import datetime
 
-JSON_FILE_PATH = 'output_three.json'
-OUTPUT_DIRECTORY = 'extracted_python_snippets'
+def find_latest_json():
+    """Find the most recent JSON file in dated folders."""
+    # Look for folders like output_2024-12-19
+    dated_folders = glob.glob("output_*")
+    if not dated_folders:
+        return None
+    
+    # Get the most recent folder
+    latest_folder = max(dated_folders, key=os.path.getmtime)
+    
+    # Find all JSON files in that folder
+    json_files = glob.glob(os.path.join(latest_folder, "*.json"))
+    if not json_files:
+        return None
+    
+    # Get the most recent JSON file
+    latest_json = max(json_files, key=os.path.getmtime)
+    return latest_json
+
+# Auto-detect the latest JSON file
+JSON_FILE_PATH = find_latest_json()
+if JSON_FILE_PATH is None:
+    print("❌ No JSON files found. Run create_json.py first.")
+    exit(1)
+
+# Get the folder containing the JSON file
+JSON_FOLDER = os.path.dirname(JSON_FILE_PATH)
+OUTPUT_DIRECTORY = os.path.join(JSON_FOLDER, 'extracted_python_snippets')
 CODE_KEY = 'code'
 FILE_EXTENSION = '.py'
 
@@ -111,6 +138,8 @@ def showOutput():
     """
     Summarize the entire process: extraction, checking, and summary.
     """
+    print(f"📁 Using JSON file: {JSON_FILE_PATH}")
+    print(f"📁 Output directory: {OUTPUT_DIRECTORY}")
     
     # Extract and save all code snippets
     created_files = extractSaveSnippets(
@@ -154,4 +183,3 @@ def showOutput():
 if __name__ == '__main__':
     final_status = showOutput()
     print(f"\nProcess finished with system exit code {final_status}")
-    # sys.exit(final_status) # reflect the type checking results
