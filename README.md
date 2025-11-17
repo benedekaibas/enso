@@ -25,6 +25,15 @@ To run **pytifex**, you’ll need a small set of third-party tools that the proj
 
 `uv pip install -e ".[dev]"`
 
+## Run pytifex
+
+In order to generate code examples, test, and evaluate type checkers in an automated way, please run the following commands:
+
+Current commands setup:
+    1. python codegen.py | python create_json.py 
+    2. python automation.py
+    3. python eval.py
+
 (THE README IS UNDER DEVELOPMENT AT THE MOMENT!)
 
 
