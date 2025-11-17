@@ -1,0 +1,870 @@
+[
+  {
+    "filename": "output_2025-11-10/extracted_python_snippets/code_snippet_0.py",
+    "code": "from typing import Protocol\n\nclass Writer(Protocol):\n    def write(self, data: bytes, mode: str = 'w') -> int: ...\n\nclass FileWriter:\n    def write(self, data: bytes, mode: str = 'a') -> int:  # Different default 'a' vs 'w'\n        return len(data)\n\ndef use_writer(w: Writer) -> None: ...\nuse_writer(FileWriter())  # Checkers disagree on default arg compatibility",
+    "checker_results": [
+      {
+        "checker_name": "mypy",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "pyrefly",
+        "status": "PASS",
+        "return_code": 0,
+        "output": " INFO 0 errors\n"
+      },
+      {
+        "checker_name": "zuban",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "ty",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "All checks passed!\n"
+      }
+    ],
+    "analysis": {
+      "correct_behavior": "PASS",
+      "reasoning": "The snippet demonstrates Python's Protocol structural subtyping semantics. According to PEP 544, structural subtyping for Protocols does not enforce strict equality for method defaults but rather ensures compatibility based on the ability to call the method, regardless of default-defined argument values. Hence, the method in the concrete 'FileWriter' class still structurally matches the Writer Protocol, as the arguments 'data: bytes' and 'mode: str' align correctly in order and type.",
+      "type_system_feature": "Protocol defaults",
+      "correct_checkers": [
+        "mypy",
+        "pyrefly",
+        "zuban",
+        "ty"
+      ],
+      "incorrect_checkers": [],
+      "confidence": "high"
+    }
+  },
+  {
+    "filename": "output_2025-11-10/extracted_python_snippets/code_snippet_1.py",
+    "code": "from typing import TypeGuard, TypeVar, Dict, Any\nK = TypeVar('K')\nV = TypeVar('V')\n\ndef is_str_dict(val: dict[Any, Any]) -> TypeGuard[dict[str, str]]:\n    return all(isinstance(k, str) and isinstance(v, str) for k, v in val.items())\n\ndef process(data: Dict[object, object]) -> None:\n    if is_str_dict(data):\n        data['key'] = 'value'  # Checkers disagree on key/value type narrowing",
+    "checker_results": [
+      {
+        "checker_name": "mypy",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "pyrefly",
+        "status": "PASS",
+        "return_code": 0,
+        "output": " INFO 0 errors\n"
+      },
+      {
+        "checker_name": "zuban",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "ty",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "All checks passed!\n"
+      }
+    ],
+    "analysis": {
+      "correct_behavior": "PASS",
+      "reasoning": "The `TypeGuard` feature in Python allows conditionally narrowing the type within a branch if the guard function (like `is_str_dict`) returns true. Here, `is_str_dict` ensures the dictionary has keys and values as strings. Since the code uses `TypeGuard` correctly, and there is no clear violation of typing rules, this should pass type checking.",
+      "type_system_feature": "TypeGuard and type narrowing behavior",
+      "correct_checkers": [
+        "mypy",
+        "pyrefly",
+        "zuban",
+        "ty"
+      ],
+      "incorrect_checkers": [],
+      "confidence": "high"
+    }
+  },
+  {
+    "filename": "output_2025-11-10/extracted_python_snippets/code_snippet_10.py",
+    "code": "# id: protocol-default-args-writer\n# EXPECTED:\n#   mypy: No error\n#   pyright: Error\n#   pyre: Error\n#   zuban: No error\n# REASON: Protocol parameter defaults aren't checked by all type checkers\nfrom typing import Protocol\n\nclass Writer(Protocol):\n    def write(self, data: bytes, mode: str = 'w') -> int: ...\n\nclass BufferedWriter:\n    def write(self, data: bytes, mode: str = 'wb') -> int:  # Different default\n        return len(data)\n\ndef use_writer(w: Writer) -> None: ...\n\nif __name__ == \"__main__\":\n    use_writer(BufferedWriter())  # Divergence in default arg compatibility",
+    "checker_results": [
+      {
+        "checker_name": "mypy",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "pyrefly",
+        "status": "PASS",
+        "return_code": 0,
+        "output": " INFO 0 errors\n"
+      },
+      {
+        "checker_name": "zuban",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "ty",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "All checks passed!\n"
+      }
+    ],
+    "analysis": {
+      "correct_behavior": "FAIL",
+      "reasoning": "The code should fail type checking because the `Protocol` defined `Writer` specifies a default value for the `mode` parameter ('w') in the `write` method, while the `BufferedWriter` class provides a different default value ('wb'). While `Protocols` support structural subtyping, they require that defaults for parameters be consistent between the implementation and the protocol definition. Divergence in defaults (here 'w' vs. 'wb') violates the protocol's requirement for matching the signature, as per PEP 544.",
+      "type_system_feature": "Protocol structural subtyping semantics",
+      "correct_checkers": [],
+      "incorrect_checkers": [
+        "mypy",
+        "pyrefly",
+        "zuban",
+        "ty"
+      ],
+      "confidence": "high"
+    }
+  },
+  {
+    "filename": "output_2025-11-10/extracted_python_snippets/code_snippet_11.py",
+    "code": "# id: typeguard-tuple-narrow\n# EXPECTED:\n#   mypy: Item access error\n#   pyright: No error\n#   pyre: Item access error\n#   zuban: No error\n# REASON: TypeGuard narrowing for tuples handled differently\nfrom typing import TypeGuard, Union\n\ndef is_int_tuple(val: tuple[Union[int, str], ...]) -> TypeGuard[tuple[int, ...]]:\n    return all(isinstance(x, int) for x in val)\n\ndef process(data: tuple[Union[int, str], ...]) -> None:\n    if is_int_tuple(data):\n        data[0] + 1  # Checkers disagree on element type narrowing\n\nif __name__ == \"__main__\":\n    process((1, \"two\"))",
+    "checker_results": [
+      {
+        "checker_name": "mypy",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "pyrefly",
+        "status": "PASS",
+        "return_code": 0,
+        "output": " INFO 0 errors\n"
+      },
+      {
+        "checker_name": "zuban",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "ty",
+        "status": "FAIL",
+        "return_code": 1,
+        "output": "error[unsupported-operator]: Operator `+` is unsupported between objects of type `int | str` and `Literal[1]`\n  --> output_2025-11-10/extracted_python_snippets/code_snippet_11.py:15:9\n   |\n13 | def process(data: tuple[Union[int, str], ...]) -> None:\n14 |     if is_int_tuple(data):\n15 |         data[0] + 1  # Checkers disagree on element type narrowing\n   |         ^^^^^^^^^^^\n16 |\n17 | if __name__ == \"__main__\":\n   |\ninfo: rule `unsupported-operator` is enabled by default\n\nFound 1 diagnostic\n"
+      }
+    ],
+    "analysis": {
+      "correct_behavior": "PASS",
+      "reasoning": "The code should pass type checking because the `is_int_tuple` function's return type, `TypeGuard[tuple[int, ...]]`, indicates that if it returns `True`, `data` is guaranteed to have the narrowed form `tuple[int, ...]`. Therefore, accessing `data[0]` and performing arithmetic operations with `int` on it is type-safe as it only contains integers after narrowing.",
+      "type_system_feature": "TypeGuard and type narrowing behavior",
+      "correct_checkers": [
+        "mypy",
+        "pyrefly",
+        "zuban"
+      ],
+      "incorrect_checkers": [
+        "ty"
+      ],
+      "confidence": "high"
+    }
+  },
+  {
+    "filename": "output_2025-11-10/extracted_python_snippets/code_snippet_12.py",
+    "code": "# id: typeddict-mixed-required\n# EXPECTED:\n#   mypy: 'name' is required\n#   pyright: 'name' is optional\n#   pyre: 'name' is required\n#   zuban: 'name' is optional\n# REASON: Total inheritance semantics differ across checkers\nfrom typing import TypedDict\nfrom typing_extensions import Required, NotRequired\n\nclass Base(TypedDict, total=True):\n    id: int\n\nclass User(Base, total=False):\n    name: Required[str]\n    age: NotRequired[int]\n\ndef handle_user(u: User) -> None:\n    u['id']  # All agree required\n    u['name']  # Checkers disagree on required status\n\nif __name__ == \"__main__\":\n    handle_user({'id': 1, 'name': 'Alice'})",
+    "checker_results": [
+      {
+        "checker_name": "mypy",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "pyrefly",
+        "status": "PASS",
+        "return_code": 0,
+        "output": " INFO 0 errors\n"
+      },
+      {
+        "checker_name": "zuban",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "ty",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "All checks passed!\n"
+      }
+    ],
+    "analysis": {
+      "correct_behavior": "FAIL",
+      "reasoning": "The 'name' field is marked as 'Required[str]' but the containing class 'User' inherits 'total=False'. Per Python typing standards (PEP 655 and related TypedDict behavior), the conflicting semantics imply 'name' should be treated as required despite the 'total=False' of the class. Mypy correctly honors the 'Required[str]' annotation, marking the field mandatory and causing it to type check successfully. However, pyright, zuban, and ty view 'name' as optional due to their interpretation of 'total=False'.",
+      "type_system_feature": "TypedDict Required/NotRequired semantics with total inheritance",
+      "correct_checkers": [
+        "mypy"
+      ],
+      "incorrect_checkers": [
+        "pyrefly",
+        "zuban",
+        "ty"
+      ],
+      "confidence": "high"
+    }
+  },
+  {
+    "filename": "output_2025-11-10/extracted_python_snippets/code_snippet_13.py",
+    "code": "# id: decorator-classmethod-return\n# EXPECTED:\n#   mypy: Incompatible return type\n#   pyright: No error\n#   pyre: Incompatible return type\n#   zuban: No error\n# REASON: Decorator chain preservation for classmethod returns\nfrom typing import Callable, TypeVar, Any\nfrom typing_extensions import ParamSpec\n\nP = ParamSpec('P')\nT = TypeVar('T')\n\ndef validate(func: Callable[P, T]) -> Callable[P, T]:\n    return func\n\nclass Factory:\n    @validate\n    @classmethod\n    def create(cls, value: int) -> \"Factory\":  # Checkers disagree on return type\n        return cls()\n\nif __name__ == \"__main__\":\n    Factory.create(42)",
+    "checker_results": [
+      {
+        "checker_name": "mypy",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "pyrefly",
+        "status": "PASS",
+        "return_code": 0,
+        "output": " INFO 0 errors\n"
+      },
+      {
+        "checker_name": "zuban",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "ty",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "All checks passed!\n"
+      }
+    ],
+    "analysis": {
+      "correct_behavior": "FAIL",
+      "reasoning": "The use of the 'validate' decorator on a classmethod does not preserve the original return type. It strips away the signature replacement that 'classmethod' performs, resulting in the 'create' method being treated as an instance method instead of a class method, which leads to a type mismatch in the `create` method. Therefore, type checkers should fail because the declared return type 'Factory' assumes the method operates as a classmethod, but this decorator alters its behavior.",
+      "type_system_feature": "Decorator chain preservation for classmethod returns",
+      "correct_checkers": [
+        "pyright",
+        "pyre"
+      ],
+      "incorrect_checkers": [
+        "mypy",
+        "zuban",
+        "ty"
+      ],
+      "confidence": "high"
+    }
+  },
+  {
+    "filename": "output_2025-11-10/extracted_python_snippets/code_snippet_14.py",
+    "code": "# id: self-generic-inheritance\n# EXPECTED:\n#   mypy: Return type incompatible\n#   pyright: No error\n#   pyre: Incompatible return type\n#   zuban: No error\n# REASON: Self type in generic base class handling\nfrom typing import Generic, TypeVar\nfrom typing_extensions import Self\nfrom abc import ABC, abstractmethod\n\nT = TypeVar('T')\n\nclass Template(ABC, Generic[T]):\n    @abstractmethod\n    def clone(self) -> Self: ...\n\nclass StringTemplate(Template[str]):\n    def clone(self) -> Self:\n        return self  # Checkers disagree on Self compatibility\n\nif __name__ == \"__main__\":\n    StringTemplate().clone()",
+    "checker_results": [
+      {
+        "checker_name": "mypy",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "pyrefly",
+        "status": "PASS",
+        "return_code": 0,
+        "output": " INFO 0 errors\n"
+      },
+      {
+        "checker_name": "zuban",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "ty",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "All checks passed!\n"
+      }
+    ],
+    "analysis": {
+      "correct_behavior": "PASS",
+      "reasoning": "The code snippet uses the `Self` type defined in PEP 673 to indicate that the return type of the `clone` method in the `Template` class is the type of the concrete subclass implementing it. This typing is correctly implemented in Python and is compatible with the behavior of generic base classes. Since `StringTemplate.clone` correctly returns `Self`, i.e., an instance of itself, adhering to the typing specified, the type checkers should accept it.",
+      "type_system_feature": "Self type in generic base classes",
+      "correct_checkers": [
+        "mypy",
+        "pyrefly",
+        "zuban",
+        "ty"
+      ],
+      "incorrect_checkers": [],
+      "confidence": "high"
+    }
+  },
+  {
+    "filename": "output_2025-11-10/extracted_python_snippets/code_snippet_15.py",
+    "code": "# id: newtype-list-covariance\n# EXPECTED:\n#   mypy: List invariant error\n#   pyright: No error\n#   pyre: List invariant error\n#   zuban: No error\n# REASON: NewType list covariance handling differs\nfrom typing import NewType, List\n\nHandle = NewType('Handle', int)\nPort = NewType('Port', int)\n\ndef open_connections(handles: List[Handle]) -> None: ...\n\nif __name__ == \"__main__\":\n    ports: List[Port] = [Port(80), Port(443)]\n    open_connections(ports)  # Checkers disagree on NewType list compatibility",
+    "checker_results": [
+      {
+        "checker_name": "mypy",
+        "status": "FAIL",
+        "return_code": 1,
+        "output": "output_2025-11-10/extracted_python_snippets/code_snippet_15.py:17: error: Argument 1 to \"open_connections\" has incompatible type \"list[Port]\"; expected \"list[Handle]\"  [arg-type]\nFound 1 error in 1 file (checked 1 source file)\n"
+      },
+      {
+        "checker_name": "pyrefly",
+        "status": "FAIL",
+        "return_code": 1,
+        "output": "ERROR Argument `list[Port]` is not assignable to parameter `handles` with type `list[Handle]` in function `open_connections` [bad-argument-type]\n  --> output_2025-11-10/extracted_python_snippets/code_snippet_15.py:17:22\n   |\n17 |     open_connections(ports)  # Checkers disagree on NewType list compatibility\n   |                      ^^^^^\n   |\n INFO 1 error\n"
+      },
+      {
+        "checker_name": "zuban",
+        "status": "FAIL",
+        "return_code": 1,
+        "output": "output_2025-11-10/extracted_python_snippets/code_snippet_15.py:17: error: Argument 1 to \"open_connections\" has incompatible type \"list[Port]\"; expected \"list[Handle]\"  [arg-type]\nFound 1 error in 1 file (checked 1 source file)\n"
+      },
+      {
+        "checker_name": "ty",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "All checks passed!\n"
+      }
+    ],
+    "analysis": {
+      "correct_behavior": "FAIL",
+      "reasoning": "According to Python typing standards, lists are invariant. This means that a list of `Port` is not interchangeable with a list of `Handle`, even though `Handle` and `Port` are both derived from `int` using NewType. NewType introduces nominal typing semantics, ensuring type safety even when the base types match.",
+      "type_system_feature": "NewType nominal typing semantics",
+      "correct_checkers": [
+        "mypy",
+        "pyrefly",
+        "zuban"
+      ],
+      "incorrect_checkers": [
+        "ty"
+      ],
+      "confidence": "high"
+    }
+  },
+  {
+    "filename": "output_2025-11-10/extracted_python_snippets/code_snippet_16.py",
+    "code": "# id: overload-literal-int\n# EXPECTED:\n#   mypy: Incompatible return type\n#   pyright: Literal type preserved\n#   pyre: Incompatible return type\n#   zuban: Literal type preserved\n# REASON: Literal type narrowing in overload resolution\nfrom typing import overload, Literal, Union\n\n@overload\ndef parse_int(value: Literal[\"0\"]) -> Literal[0]: ...\n@overload\ndef parse_int(value: str) -> Union[int, None]: ...\n\ndef parse_int(value: str) -> Union[int, None]:\n    try: return int(value)\n    except: return None\n\nresult = parse_int(\"0\")  # Checkers disagree on Literal[0] vs int\n\nif __name__ == \"__main__\":\n    print(result)",
+    "checker_results": [
+      {
+        "checker_name": "mypy",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "pyrefly",
+        "status": "PASS",
+        "return_code": 0,
+        "output": " INFO 0 errors\n"
+      },
+      {
+        "checker_name": "zuban",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "ty",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "All checks passed!\n"
+      }
+    ],
+    "analysis": {
+      "correct_behavior": "PASS",
+      "reasoning": "The code snippet utilizes the overload decorator to specify different behaviors for `parse_int` depending on the input type. The overload resolution requires type narrowing, where Literal types are preserved for specific variants. Since the implementation handles return types without violating the defined overloads (the return type can indeed be `Literal[0]` in context), type checkers should accept it. Thus, PASS is appropriate.",
+      "type_system_feature": "Literal type narrowing in overload resolution",
+      "correct_checkers": [
+        "mypy",
+        "pyrefly",
+        "zuban",
+        "ty"
+      ],
+      "incorrect_checkers": [],
+      "confidence": "high"
+    }
+  },
+  {
+    "filename": "output_2025-11-10/extracted_python_snippets/code_snippet_17.py",
+    "code": "# id: final-method-override\n# EXPECTED:\n#   mypy: Cannot override final method\n#   pyright: No error\n#   pyre: Cannot override final method\n#   zuban: No error\n# REASON: Final method override checking strictness\nfrom typing import final\n\nclass Base:\n    @final\n    def critical(self) -> None: ...\n\nclass Derived(Base):\n    def critical(self) -> None:  # Checkers disagree on final enforcement\n        print(\"Overridden\")\n\nif __name__ == \"__main__\":\n    Derived().critical()",
+    "checker_results": [
+      {
+        "checker_name": "mypy",
+        "status": "FAIL",
+        "return_code": 1,
+        "output": "output_2025-11-10/extracted_python_snippets/code_snippet_17.py:15: error: Cannot override final attribute \"critical\" (previously declared in base class \"Base\")  [misc]\nFound 1 error in 1 file (checked 1 source file)\n"
+      },
+      {
+        "checker_name": "pyrefly",
+        "status": "FAIL",
+        "return_code": 1,
+        "output": "ERROR `critical` is declared as final in parent class `Base` [bad-override]\n  --> output_2025-11-10/extracted_python_snippets/code_snippet_17.py:15:9\n   |\n15 |     def critical(self) -> None:  # Checkers disagree on final enforcement\n   |         ^^^^^^^^\n   |\n INFO 1 error\n"
+      },
+      {
+        "checker_name": "zuban",
+        "status": "FAIL",
+        "return_code": 1,
+        "output": "output_2025-11-10/extracted_python_snippets/code_snippet_17.py:15: error: Cannot override final attribute \"critical\" (previously declared in base class \"Base\")  [misc]\nFound 1 error in 1 file (checked 1 source file)\n"
+      },
+      {
+        "checker_name": "ty",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "All checks passed!\n"
+      }
+    ],
+    "analysis": {
+      "correct_behavior": "PASS",
+      "reasoning": "The '@final' decorator in Python is meant to signal that a method or attribute should not be overridden. However, this is strictly a signaling mechanism, and Python itself, which adheres to runtime dynamics, does not enforce it. Mypy, Pyre, and Zuban are strictly enforcing the '@final' constraint as part of type checking, treating it as an error if overridden. Some type checkers, like 'ty', allow the code to pass, treating the '@final' annotation as a documentation hint rather than a strict enforcement constraint. As Python runtime allows overriding without issue, the correct behavior for type checkers should align with runtime.",
+      "type_system_feature": "Final method override",
+      "correct_checkers": [
+        "ty"
+      ],
+      "incorrect_checkers": [
+        "mypy",
+        "zuban",
+        "pyrefly"
+      ],
+      "confidence": "high"
+    }
+  },
+  {
+    "filename": "output_2025-11-10/extracted_python_snippets/code_snippet_18.py",
+    "code": "# id: double-bound-generic\n# EXPECTED:\n#   mypy: Type argument error\n#   pyright: No error\n#   pyre: Type argument error\n#   zuban: No error\n# REASON: Nested generic bounds checking\nfrom typing import TypeVar, Generic\n\nT = TypeVar('T', bound=float)\nU = TypeVar('U', bound=Generic[T])\n\nclass Container(Generic[T]): ...\n\ndef process(container: U) -> None: ...\n\nif __name__ == \"__main__\":\n    process(Container[float]())  # Checkers disagree on double-bound compatibility",
+    "checker_results": [
+      {
+        "checker_name": "mypy",
+        "status": "FAIL",
+        "return_code": 1,
+        "output": "output_2025-11-10/extracted_python_snippets/code_snippet_18.py:11: error: Variable \"typing.Generic\" is not valid as a type  [valid-type]\noutput_2025-11-10/extracted_python_snippets/code_snippet_18.py:11: note: See https://mypy.readthedocs.io/en/stable/common_issues.html#variables-vs-type-aliases\noutput_2025-11-10/extracted_python_snippets/code_snippet_18.py:11: error: Type variable \"code_snippet_18.T\" is unbound  [valid-type]\noutput_2025-11-10/extracted_python_snippets/code_snippet_18.py:11: note: (Hint: Use \"Generic[T]\" or \"Protocol[T]\" base class to bind \"T\" inside a class)\noutput_2025-11-10/extracted_python_snippets/code_snippet_18.py:11: note: (Hint: Use \"T\" in function signature to bind \"T\" inside a function)\nFound 2 errors in 1 file (checked 1 source file)\n"
+      },
+      {
+        "checker_name": "pyrefly",
+        "status": "FAIL",
+        "return_code": 1,
+        "output": "ERROR `Generic` is not allowed in this context [invalid-annotation]\n  --> output_2025-11-10/extracted_python_snippets/code_snippet_18.py:11:24\n   |\n11 | U = TypeVar('U', bound=Generic[T])\n   |                        ^^^^^^^^^^\n   |\n INFO 1 error\n"
+      },
+      {
+        "checker_name": "zuban",
+        "status": "FAIL",
+        "return_code": 1,
+        "output": "output_2025-11-10/extracted_python_snippets/code_snippet_18.py:11: error: Invalid type  [valid-type]\nFound 1 error in 1 file (checked 1 source file)\n"
+      },
+      {
+        "checker_name": "ty",
+        "status": "FAIL",
+        "return_code": 1,
+        "output": "error[invalid-type-form]: `typing.Generic` is not allowed in type expressions\n  --> output_2025-11-10/extracted_python_snippets/code_snippet_18.py:11:24\n   |\n10 | T = TypeVar('T', bound=float)\n11 | U = TypeVar('U', bound=Generic[T])\n   |                        ^^^^^^^^^^\n12 |\n13 | class Container(Generic[T]): ...\n   |\ninfo: rule `invalid-type-form` is enabled by default\n\nFound 1 diagnostic\n"
+      }
+    ],
+    "analysis": {
+      "correct_behavior": "FAIL",
+      "reasoning": "The code snippet attempts to use `Generic[T]` as a bound within a `TypeVar`, which is not allowed under Python typing rules. `Generic` is meant for declaring generic base classes and cannot be utilized as a bounded type in a `TypeVar`. Therefore, all type checkers flag this as invalid, following PEP 484 which states that `Generic[...]` usage is restricted to class declarations.",
+      "type_system_feature": "Nested generic bounds checking",
+      "correct_checkers": [
+        "mypy",
+        "pyrefly",
+        "zuban",
+        "ty"
+      ],
+      "incorrect_checkers": [],
+      "confidence": "high"
+    }
+  },
+  {
+    "filename": "output_2025-11-10/extracted_python_snippets/code_snippet_19.py",
+    "code": "# id: protocol-keyword-args\n# EXPECTED:\n#   mypy: Incompatible types\n#   pyright: No error\n#   pyre: Incompatible types\n#   zuban: No error\n# REASON: Positional vs keyword argument protocol matching\nfrom typing import Protocol\n\nclass Formatter(Protocol):\n    def format(self, *, text: str, width: int) -> str: ...\n\ndef simple_format(text: str, width: int) -> str:\n    return f\"{text:{width}}\"\n\nhandler: Formatter = simple_format  # Checkers disagree on positional params\n\nif __name__ == \"__main__\":\n    handler.format(text=\"test\", width=10)",
+    "checker_results": [
+      {
+        "checker_name": "mypy",
+        "status": "FAIL",
+        "return_code": 1,
+        "output": "output_2025-11-10/extracted_python_snippets/code_snippet_19.py:16: error: Incompatible types in assignment (expression has type \"Callable[[str, int], str]\", variable has type \"Formatter\")  [assignment]\nFound 1 error in 1 file (checked 1 source file)\n"
+      },
+      {
+        "checker_name": "pyrefly",
+        "status": "FAIL",
+        "return_code": 1,
+        "output": "ERROR `(text: str, width: int) -> str` is not assignable to `Formatter` [bad-assignment]\n  --> output_2025-11-10/extracted_python_snippets/code_snippet_19.py:16:22\n   |\n16 | handler: Formatter = simple_format  # Checkers disagree on positional params\n   |                      ^^^^^^^^^^^^^\n   |\n  Protocol `Formatter` requires attribute `format`\n INFO 1 error\n"
+      },
+      {
+        "checker_name": "zuban",
+        "status": "FAIL",
+        "return_code": 1,
+        "output": "output_2025-11-10/extracted_python_snippets/code_snippet_19.py:16: error: Incompatible types in assignment (expression has type \"Callable[[str, int], str]\", variable has type \"Formatter\")  [assignment]\nFound 1 error in 1 file (checked 1 source file)\n"
+      },
+      {
+        "checker_name": "ty",
+        "status": "FAIL",
+        "return_code": 1,
+        "output": "error[invalid-assignment]: Object of type `def simple_format(text: str, width: int) -> str` is not assignable to `Formatter`\n  --> output_2025-11-10/extracted_python_snippets/code_snippet_19.py:16:1\n   |\n14 |     return f\"{text:{width}}\"\n15 |\n16 | handler: Formatter = simple_format  # Checkers disagree on positional params\n   | ^^^^^^^\n17 |\n18 | if __name__ == \"__main__\":\n   |\ninfo: rule `invalid-assignment` is enabled by default\n\nFound 1 diagnostic\n"
+      }
+    ],
+    "analysis": {
+      "correct_behavior": "FAIL",
+      "reasoning": "The code fails type checks appropriately because the 'simple_format' function does not match the protocol 'Formatter'. 'Formatter' specifies its method 'format' with keyword-only arguments ('text' and 'width'), while 'simple_format' accepts positional arguments for 'text' and 'width'. Positional vs keyword argument protocol matching does not align structurally here, leading to an incompatibility.",
+      "type_system_feature": "Protocol keyword argument matching",
+      "correct_checkers": [
+        "mypy",
+        "pyrefly",
+        "zuban",
+        "ty"
+      ],
+      "incorrect_checkers": [],
+      "confidence": "high"
+    }
+  },
+  {
+    "filename": "output_2025-11-10/extracted_python_snippets/code_snippet_2.py",
+    "code": "from typing import TypedDict\nfrom typing_extensions import NotRequired\n\nclass Parent(TypedDict, total=True):\n    a: int\n    b: NotRequired[str]\n\nclass Child(Parent, total=False):\n    c: float  # Now 'a' is required, 'b' is not, 'c' is not required\n\ndef test(td: Child) -> None:\n    td['a']  # Checkers disagree on required status of 'a' in Child",
+    "checker_results": [
+      {
+        "checker_name": "mypy",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "pyrefly",
+        "status": "PASS",
+        "return_code": 0,
+        "output": " INFO 0 errors\n"
+      },
+      {
+        "checker_name": "zuban",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "ty",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "All checks passed!\n"
+      }
+    ],
+    "analysis": {
+      "correct_behavior": "FAIL",
+      "reasoning": "The code SHOULD fail type checking because `Child` inherits `Parent`, but overrides its `total` setting to be `False`. PEP 589 specifies that the `total` attribute controls whether all keys in a TypedDict are required (when set to True) or optional (when set to False). While Child includes new key `c` as optional, it redefines Parent's required behavior of `a`. This causes potential confusion: according to the inheritance semantics, keys from Parent MUST abide by their original requirements\u2014they must not implicitly become optional due to the `total=False` of Child. `td['a']` would therefore be flagged for ambiguity under proper type checking.",
+      "type_system_feature": "TypedDict inheritance and `total` semantics",
+      "correct_checkers": [],
+      "incorrect_checkers": [
+        "mypy",
+        "pyrefly",
+        "zuban",
+        "ty"
+      ],
+      "confidence": "high"
+    }
+  },
+  {
+    "filename": "output_2025-11-10/extracted_python_snippets/code_snippet_3.py",
+    "code": "from typing import Callable, TypeVar, Any\nfrom typing_extensions import ParamSpec\n\nP = ParamSpec('P')\nT = TypeVar('T')\n\ndef debug(func: Callable[P, T]) -> Callable[P, T]:\n    return func\n\nclass Logger:\n    @debug\n    @classmethod\n    def log(cls, message: str) -> None:  # Checkers disagree on decorated classmethod type\n        print(message)\n\nLogger.log(\"test\")  # Some checkers may complain about 'cls' argument",
+    "checker_results": [
+      {
+        "checker_name": "mypy",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "pyrefly",
+        "status": "PASS",
+        "return_code": 0,
+        "output": " INFO 0 errors\n"
+      },
+      {
+        "checker_name": "zuban",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "ty",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "All checks passed!\n"
+      }
+    ],
+    "analysis": {
+      "correct_behavior": "PASS",
+      "reasoning": "The code should pass type checking because the ParamSpec 'P' correctly represents the parameters and is compatible with Callable[P, T]. The 'debug' decorator does not alter the call signature of the decorated class method 'log', ensuring that the 'cls' argument type is properly propagated. Structural typing rules for ParamSpec, callable, and methods (including class methods) allow this pattern to work without issues.",
+      "type_system_feature": "ParamSpec and Callable compatibility",
+      "correct_checkers": [
+        "mypy",
+        "pyrefly",
+        "zuban",
+        "ty"
+      ],
+      "incorrect_checkers": [],
+      "confidence": "high"
+    }
+  },
+  {
+    "filename": "output_2025-11-10/extracted_python_snippets/code_snippet_4.py",
+    "code": "from typing import Generic, TypeVar\nfrom typing_extensions import Self\nfrom abc import ABC, abstractmethod\n\nT = TypeVar('T')\n\nclass Builder(ABC, Generic[T]):\n    @abstractmethod\n    def build(self) -> Self: ...\n\nclass IntBuilder(Builder[int]):\n    def build(self) -> Self:\n        return self  # Checkers disagree on return type compatibility",
+    "checker_results": [
+      {
+        "checker_name": "mypy",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "pyrefly",
+        "status": "PASS",
+        "return_code": 0,
+        "output": " INFO 0 errors\n"
+      },
+      {
+        "checker_name": "zuban",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "ty",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "All checks passed!\n"
+      }
+    ],
+    "analysis": {
+      "correct_behavior": "FAIL",
+      "reasoning": "The issue lies with the return type specified by the `build` method in the `IntBuilder` class, where it declares a return type of `Self`. The `Self` special form represents the current instance type within a class, and its proper usage requires that the method returns an instance compatible with the specific derived type. In this case, `IntBuilder` should return itself; however, the `Builder[int]` generic constraint specifies that `build` should inherently produce an `int` because `Builder` takes a type parameter `T`. Returning `self` doesn't align with the semantics defined by the `Builder` class. Therefore, this code should fail type checking as the return type violates `Self` typing rules.",
+      "type_system_feature": "Self type semantics",
+      "correct_checkers": [],
+      "incorrect_checkers": [
+        "mypy",
+        "pyrefly",
+        "zuban",
+        "ty"
+      ],
+      "confidence": "high"
+    }
+  },
+  {
+    "filename": "output_2025-11-10/extracted_python_snippets/code_snippet_5.py",
+    "code": "from typing import NewType, List\n\nAccountID = NewType('AccountID', int)\nTransactionID = NewType('TransactionID', int)\n\ndef process_accounts(ids: List[AccountID]) -> None: ...\n\nmixed_list: List[int] = [AccountID(100), 200]  # Contains both AccountID and int\nprocess_accounts(mixed_list)  # Checkers disagree on List[AccountID] vs List[int]",
+    "checker_results": [
+      {
+        "checker_name": "mypy",
+        "status": "FAIL",
+        "return_code": 1,
+        "output": "output_2025-11-10/extracted_python_snippets/code_snippet_5.py:9: error: Argument 1 to \"process_accounts\" has incompatible type \"list[int]\"; expected \"list[AccountID]\"  [arg-type]\nFound 1 error in 1 file (checked 1 source file)\n"
+      },
+      {
+        "checker_name": "pyrefly",
+        "status": "FAIL",
+        "return_code": 1,
+        "output": "ERROR Argument `list[int]` is not assignable to parameter `ids` with type `list[AccountID]` in function `process_accounts` [bad-argument-type]\n --> output_2025-11-10/extracted_python_snippets/code_snippet_5.py:9:18\n  |\n9 | process_accounts(mixed_list)  # Checkers disagree on List[AccountID] vs List[int]\n  |                  ^^^^^^^^^^\n  |\n INFO 1 error\n"
+      },
+      {
+        "checker_name": "zuban",
+        "status": "FAIL",
+        "return_code": 1,
+        "output": "output_2025-11-10/extracted_python_snippets/code_snippet_5.py:9: error: Argument 1 to \"process_accounts\" has incompatible type \"list[int]\"; expected \"list[AccountID]\"  [arg-type]\nFound 1 error in 1 file (checked 1 source file)\n"
+      },
+      {
+        "checker_name": "ty",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "All checks passed!\n"
+      }
+    ],
+    "analysis": {
+      "correct_behavior": "FAIL",
+      "reasoning": "The argument `mixed_list` contains elements of type `AccountID` and `int`, which is incompatible with the expected type `List[AccountID]` for the `process_accounts` function. In Python typing, `NewType` is a nominal type and does not permit implicit substitution between `int` and a `NewType` created from `int`. Furthermore, `List[AccountID]` is invariant and cannot accept a `List[int]`. Thus, the code should fail type checking due to type incompatibility.",
+      "type_system_feature": "NewType nominal typing semantics",
+      "correct_checkers": [
+        "mypy",
+        "pyrefly",
+        "zuban"
+      ],
+      "incorrect_checkers": [
+        "ty"
+      ],
+      "confidence": "high"
+    }
+  },
+  {
+    "filename": "output_2025-11-10/extracted_python_snippets/code_snippet_6.py",
+    "code": "from typing import overload, Literal, Union\n\n@overload\ndef convert(val: Literal[1]) -> str: ...\n@overload\ndef convert(val: Literal[2]) -> int: ...\n@overload\ndef convert(val: int) -> float: ...\n\ndef convert(val: int) -> Union[str, int, float]:\n    if val == 1:\n        return \"one\"\n    elif val == 2:\n        return 2\n    return float(val)\n\nresult = convert(1)  # Checkers disagree: str vs Union[...]",
+    "checker_results": [
+      {
+        "checker_name": "mypy",
+        "status": "FAIL",
+        "return_code": 1,
+        "output": "output_2025-11-10/extracted_python_snippets/code_snippet_6.py:4: error: Overloaded function signatures 1 and 3 overlap with incompatible return types  [overload-overlap]\noutput_2025-11-10/extracted_python_snippets/code_snippet_6.py:6: error: Overloaded function signatures 2 and 3 overlap with incompatible return types  [overload-overlap]\nFound 2 errors in 1 file (checked 1 source file)\n"
+      },
+      {
+        "checker_name": "pyrefly",
+        "status": "PASS",
+        "return_code": 0,
+        "output": " INFO 0 errors\n"
+      },
+      {
+        "checker_name": "zuban",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "ty",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "All checks passed!\n"
+      }
+    ],
+    "analysis": {
+      "correct_behavior": "FAIL",
+      "reasoning": "The code snippet defines overloaded function signatures using @overload, which specify different return types depending on Literal values. Mypy identifies overlapping signatures in this case, as the last overload (accepting any int) conflicts with the two preceding Literal overloads (for Literal values 1 and 2). According to the current typing rules of overload resolution (PEP 484), overloaded signatures should avoid overlapping with conflicting result types, as this leads to ambiguity for type checkers particularly when the runtime implementation diverges from the expected behavior.\n\nMypy is correct to flag this as an error, as the Literal types define strict matching constraints, and the 'int' type generally encompasses all integers (including 1 and 2), thereby overriding the stricter Literal-based overloads.",
+      "type_system_feature": "Overload resolution rules",
+      "correct_checkers": [
+        "mypy"
+      ],
+      "incorrect_checkers": [
+        "pyrefly",
+        "zuban",
+        "ty"
+      ],
+      "confidence": "high"
+    }
+  },
+  {
+    "filename": "output_2025-11-10/extracted_python_snippets/code_snippet_7.py",
+    "code": "from typing import Final\n\nclass Base:\n    @property\n    def value(self) -> int:\n        return 42\n\nclass Derived(Base):\n    value: Final[int] = 100  # Checkers disagree on overriding property with attribute",
+    "checker_results": [
+      {
+        "checker_name": "mypy",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "pyrefly",
+        "status": "PASS",
+        "return_code": 0,
+        "output": " INFO 0 errors\n"
+      },
+      {
+        "checker_name": "zuban",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "ty",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "All checks passed!\n"
+      }
+    ],
+    "analysis": {
+      "correct_behavior": "FAIL",
+      "reasoning": "The code should fail type checking because the Derived class's attribute 'value' is declared as a 'Final[int]' (using PEP 591), which does not override the Base class's @property, as the types between a property getter and an attribute are not compatible. Moreover, replacing a method-like property with a static attribute contradicts expected class member semantics in Python's type system.",
+      "type_system_feature": "Final semantics",
+      "correct_checkers": [],
+      "incorrect_checkers": [
+        "mypy",
+        "pyrefly",
+        "zuban",
+        "ty"
+      ],
+      "confidence": "high"
+    }
+  },
+  {
+    "filename": "output_2025-11-10/extracted_python_snippets/code_snippet_8.py",
+    "code": "from typing import TypeVar, Generic\n\nclass Box(Generic[T]):\n    pass\n\nT2 = TypeVar('T2', bound=Box[float])\n\ndef unpack(box: T2) -> None: ...\n\nfloat_box: Box[float] = Box()\nunpack(float_box)  # Checkers disagree if T2 bound is properly enforced",
+    "checker_results": [
+      {
+        "checker_name": "mypy",
+        "status": "FAIL",
+        "return_code": 1,
+        "output": "output_2025-11-10/extracted_python_snippets/code_snippet_8.py:3: error: Free type variable expected in Generic[...]  [misc]\noutput_2025-11-10/extracted_python_snippets/code_snippet_8.py:3: error: Name \"T\" is not defined  [name-defined]\noutput_2025-11-10/extracted_python_snippets/code_snippet_8.py:6: error: \"Box\" expects no type arguments, but 1 given  [type-arg]\noutput_2025-11-10/extracted_python_snippets/code_snippet_8.py:10: error: \"Box\" expects no type arguments, but 1 given  [type-arg]\nFound 4 errors in 1 file (checked 1 source file)\n"
+      },
+      {
+        "checker_name": "pyrefly",
+        "status": "FAIL",
+        "return_code": 1,
+        "output": "ERROR Could not find name `T` [unknown-name]\n --> output_2025-11-10/extracted_python_snippets/code_snippet_8.py:3:19\n  |\n3 | class Box(Generic[T]):\n  |                   ^\n  |\n INFO 1 error\n"
+      },
+      {
+        "checker_name": "zuban",
+        "status": "FAIL",
+        "return_code": 1,
+        "output": "output_2025-11-10/extracted_python_snippets/code_snippet_8.py:3: error: Name \"T\" is not defined  [name-defined]\noutput_2025-11-10/extracted_python_snippets/code_snippet_8.py:3: error: Free type variable expected in Generic[...]  [misc]\noutput_2025-11-10/extracted_python_snippets/code_snippet_8.py:6: error: \"Box\" expects no type arguments, but 1 given  [type-arg]\noutput_2025-11-10/extracted_python_snippets/code_snippet_8.py:10: error: \"Box\" expects no type arguments, but 1 given  [type-arg]\nFound 4 errors in 1 file (checked 1 source file)\n"
+      },
+      {
+        "checker_name": "ty",
+        "status": "FAIL",
+        "return_code": 1,
+        "output": "error[invalid-argument-type]: `Unknown` is not a valid argument to `Generic`\n --> output_2025-11-10/extracted_python_snippets/code_snippet_8.py:3:11\n  |\n1 | from typing import TypeVar, Generic\n2 |\n3 | class Box(Generic[T]):\n  |           ^^^^^^^\n4 |     pass\n  |\ninfo: rule `invalid-argument-type` is enabled by default\n\nerror[unresolved-reference]: Name `T` used when not defined\n --> output_2025-11-10/extracted_python_snippets/code_snippet_8.py:3:19\n  |\n1 | from typing import TypeVar, Generic\n2 |\n3 | class Box(Generic[T]):\n  |                   ^\n4 |     pass\n  |\ninfo: rule `unresolved-reference` is enabled by default\n\nFound 2 diagnostics\n"
+      }
+    ],
+    "analysis": {
+      "correct_behavior": "FAIL",
+      "reasoning": "The code has errors related to the definition and use of the TypeVar and Generic classes. Specifically, the TypeVar 'T' is declared but not properly used in the class Box(Generic[T]). Furthermore, the specific type arguments in 'Box[float]' are incompatible because Box is not set up to accept those as valid type arguments. These errors violate the requirements of PEP 484 for type hinting and generic classes.",
+      "type_system_feature": "Generic class TypeVar bounds",
+      "correct_checkers": [
+        "mypy",
+        "pyrefly",
+        "zuban",
+        "ty"
+      ],
+      "incorrect_checkers": [],
+      "confidence": "high"
+    }
+  },
+  {
+    "filename": "output_2025-11-10/extracted_python_snippets/code_snippet_9.py",
+    "code": "from typing import Protocol\n\nclass Handler(Protocol):\n    def __call__(self, *, timeout: int) -> str: ...\n\ndef handle(timeout: int) -> str:\n    return str(timeout)\n\nhandler: Handler = handle  # Checkers disagree on positional vs keyword",
+    "checker_results": [
+      {
+        "checker_name": "mypy",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "pyrefly",
+        "status": "PASS",
+        "return_code": 0,
+        "output": " INFO 0 errors\n"
+      },
+      {
+        "checker_name": "zuban",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "Success: no issues found in 1 source file\n"
+      },
+      {
+        "checker_name": "ty",
+        "status": "PASS",
+        "return_code": 0,
+        "output": "All checks passed!\n"
+      }
+    ],
+    "analysis": {
+      "correct_behavior": "FAIL",
+      "reasoning": "The code violates the Protocol's requirement for a method that accepts only **kwargs (keyword arguments). The 'Handler' Protocol specifies a '__call__' method that mandates the 'timeout' argument to be passed as a keyword argument (using '*'). However, the 'handle' function accepts 'timeout' as a positional argument. This mismatch means the Protocol requirement is not satisfied, and it should fail type checking. Passing positional arguments when a Protocol requires keyword arguments is an explicit typing error.",
+      "type_system_feature": "Protocol structural subtyping semantics",
+      "correct_checkers": [],
+      "incorrect_checkers": [
+        "mypy",
+        "pyrefly",
+        "zuban",
+        "ty"
+      ],
+      "confidence": "high"
+    }
+  }
+]
