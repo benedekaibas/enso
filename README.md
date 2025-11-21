@@ -11,6 +11,7 @@ The tool automatically analyzes and reconstructs closed GitHub issues from multi
 
 ## How Does PYtifex Work?
 
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              PIPELINE FLOW                                   │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -86,6 +87,7 @@ The tool automatically analyzes and reconstructs closed GitHub issues from multi
                                                │ ✗ Skip this issue │      │ Continue tweaking │
                                                │ Move to next      │      └───────────────────┘
                                                └───────────────────┘
+```
 
 ## Setup
 
