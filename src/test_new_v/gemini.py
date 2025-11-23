@@ -93,7 +93,7 @@ def format_output(raw_output: str) -> str:
     return "\n".join(lines)
 
 @agent.tool
-async def main():
+def main():
     """Run the agent."""
     # Prepare the user message with context
     trackers = issue_trackers()
@@ -134,5 +134,5 @@ async def main():
 
 if __name__ == "__main__":
     # Run the async main function
-    result = asyncio.run(main())
+    main() 
 
