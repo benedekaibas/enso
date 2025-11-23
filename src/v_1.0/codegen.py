@@ -290,7 +290,9 @@ OUTPUT FORMAT for each:
 #   zuban: <behavior>
 # REASON: <specific technical reason>
 <complete runnable code>
-Generate 10 such high-quality divergence examples.
+Generate 10 such high-quality divergence examples, but do not give output until you get to examples where type checkers disagree with each other. Make multiple rounds of running the search and looking for code examples and generating them. At the end tell me how many rounds you did!
+Make sure that all the generated examples are correct for syntax!
+Before giving me the output run the typecheckers on the examples and only give me the output when there is disagreements between them!
 """
 
 if __name__ == "__main__":
@@ -335,5 +337,4 @@ python pydantic_better_version.py --model gpt-4-turbo --temperature 0.8
 Current commands setup:
     1. python codegen.py | python create_json.py 
     2. python automation.py
-
 """

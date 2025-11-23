@@ -8,6 +8,7 @@ license = {text = "MIT"}
 authors = [
     {name = "Benedek Kaibas", email = "kaibas01@allegheny.edu"}
 ]
+
 dependencies = [
     "pydantic>=2.0",
     "pydantic-ai",
