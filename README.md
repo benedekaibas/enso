@@ -115,5 +115,3 @@ Current commands setup:
     3. python eval.py
 
 (THE README IS UNDER DEVELOPMENT AT THE MOMENT!)
-
-
