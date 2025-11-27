@@ -1,468 +1,369 @@
 from pydantic_ai import Agent, RunContext
+from pydantic_ai.tools import ToolDenied
 from dataclasses import dataclass, field
-import re
 import asyncio
 
 @dataclass
 class LLMState:
-    """Shared state to track functions' results."""
-    initial_prompt: bool = False
-    urls_visited: bool = False
-    issues_selected: bool = False
-    code_tweaked: bool = False
-    type_checkers_run: bool = False
-    
-    # Store results from each step
-    selected_issues: list[str] = field(default_factory=list)
-    code_examples: list[str] = field(default_factory=list)
-    type_checker_outputs: dict = field(default_factory=dict)
+    """Track workflow state."""
+    found_issues: list[str] = field(default_factory=list)
+    extracted_code: list[str] = field(default_factory=list)
+    tweaked_code: list[str] = field(default_factory=list)
+    attempt_count: int = 0
+    checker_outputs: dict = field(default_factory=dict)
 
-def agent_prompt() -> str:
-    """Create an initial prompt to the agent."""
-    prompt = """Your job is to create code examples that force Python type checkers to generate false positive and false negative reports.
-    
-    A STRONG disagreement means: Some type checkers report "no issues found" while others report error messages.
-    The more type checkers that disagree (different outputs), the stronger the example.
-    
-    Follow the functions in order and complete each step before moving to the next.
-    After EACH tool call, you MUST call the corresponding evaluate function before proceeding."""
-    return prompt
+def system_prompt() -> str:
+    """Initial prompt to the agent."""
+    return """Your job is to create code examples that force Python type checkers to generate disagreements.
+
+DISAGREEMENT: At least one type checker gives a different result from others.
+Example: 3 checkers FAIL, 1 PASSES = DISAGREEMENT ✓
+
+KEY STRATEGIES:
+1. Generic type variance - Return wrong type when Generic[T] expected
+2. Union narrowing - isinstance() then return mismatched type  
+3. Async/await - Mix sync/async callables
+4. Optional/None - Return None when non-Optional expected
+5. Protocol typing - Partial protocol implementation
+
+Example:
+```python
+from typing import TypeVar
+T = TypeVar('T')
+def foo(x: T) -> T:
+    if isinstance(x, int):
+        return "wrong"
+    return x
+```
+
+Issue trackers:
+- mypy: https://github.com/python/mypy/issues
+- pyrefly: https://github.com/facebook/pyrefly/issues
+- ty: https://github.com/astral-sh/ty/issues
+
+Use bash_tool to run type checkers."""
 
 agent = Agent(
     'google-gla:gemini-2.0-flash',
     deps_type=LLMState,
-    system_prompt=agent_prompt(),
+    system_prompt=system_prompt(),
 )
 
 @agent.tool
-def visit_issue_trackers(ctx: RunContext[LLMState]) -> str:
-    """
-    Step 1: Visit the issue tracker URLs for mypy, pyrefly, zuban, and ty.
-    Search for CLOSED issues from 2023-2025 with labels: 'bug', 'typechecking', or 'runtime semantics'.
+def find_issues(ctx: RunContext[LLMState], 
+                issue_url_1: str, issue_url_2: str, issue_url_3: str) -> str:
+    """Store 3 closed issue URLs from 2023-2025 with bug/typechecking labels."""
+    print(f"\n{'='*60}")
+    print(f"🔧 TOOL: find_issues")
+    print(f"{'='*60}")
+    print(f"  URL 1: {issue_url_1}")
+    print(f"  URL 2: {issue_url_2}")
+    print(f"  URL 3: {issue_url_3}")
     
-    Use web_search to find at least 3-5 issues.
-    
-    Issue trackers:
-    - mypy: https://github.com/python/mypy/issues
-    - pyrefly: https://github.com/facebook/pyrefly/issues  
-    - zuban: https://github.com/zubanls/zuban/issues
-    - ty: https://github.com/astral-sh/ty/issues
-    
-    YOU MUST return the URLs in this EXACT format:
-    
-    FOUND ISSUES:
-    - https://github.com/python/mypy/issues/XXXXX
-    - https://github.com/python/mypy/issues/YYYYY
-    - https://github.com/astral-sh/ty/issues/ZZZZZ
-    
-    After providing URLs, immediately call evaluate_visited_urls with your response.
-    """
-    if not ctx.deps.initial_prompt:
-        return "ERROR: Initial prompt not acknowledged."
-    
-    return """Use web_search to find GitHub issues now. Search for:
-    
-    1. "github.com/python/mypy closed bug 2023"
-    2. "github.com/astral-sh/ty closed bug 2023"  
-    3. "github.com/facebook/pyrefly closed issues"
-    4. "github.com/zubanls/zuban closed issues"
-    
-    Visit at least 3-5 issue URLs and return them in the FOUND ISSUES format.
-    Then IMMEDIATELY call evaluate_visited_urls with your response."""
+    ctx.deps.found_issues = [issue_url_1, issue_url_2, issue_url_3]
+    print("  ✓ Stored 3 issues")
+    return "Stored 3 issues. Next: extract_code"
 
 @agent.tool
-def evaluate_visited_urls(ctx: RunContext[LLMState], urls_found: str) -> str:
-    """
-    Evaluator for visit_issue_trackers.
-    Checks if the URLs are valid GitHub issue links from the correct repositories.
+def extract_code(ctx: RunContext[LLMState], 
+                 code_1: str, code_2: str, code_3: str) -> str | ToolDenied:
+    """Extract Python code from the 3 issues using web_fetch."""
+    print(f"\n{'='*60}")
+    print(f"🔧 TOOL: extract_code")
+    print(f"{'='*60}")
     
-    Pass the exact output from visit_issue_trackers to this function.
-    """
-    # Check if we have valid URLs
-    valid_repos = ['python/mypy', 'facebook/pyrefly', 'zubanls/zuban', 'astral-sh/ty']
+    if not ctx.deps.found_issues:
+        print("  ❌ ERROR: No issues found")
+        return ToolDenied("Must find issues first. Call find_issues.")
     
-    # Extract URLs from the response
-    url_pattern = r'https://github\.com/([\w\-]+/[\w\-]+)/issues/(\d+)'
-    found_urls = re.findall(url_pattern, urls_found)
+    print(f"  Code 1: {len(code_1)} characters")
+    print(f"  Code 2: {len(code_2)} characters")
+    print(f"  Code 3: {len(code_3)} characters")
     
-    if len(found_urls) < 3:
-        return f"EVALUATION FAILED: Need at least 3 valid issue URLs. Found only {len(found_urls)}. Search for more issues and call visit_issue_trackers again."
-    
-    # Check if URLs are from valid repositories
-    valid_issues = []
-    for repo, issue_num in found_urls:
-        if any(valid_repo in repo for valid_repo in valid_repos):
-            valid_issues.append(f"https://github.com/{repo}/issues/{issue_num}")
-    
-    if len(valid_issues) < 3:
-        return f"EVALUATION FAILED: Need at least 3 URLs from valid repositories (mypy, pyrefly, zuban, ty). Found {len(valid_issues)}. Search again."
-    
-    # Evaluation passed
-    ctx.deps.urls_visited = True
-    ctx.deps.selected_issues = valid_issues
-    return f"✓ EVALUATION PASSED: Found {len(valid_issues)} valid issue URLs.\nIssues: {', '.join(valid_issues)}\n\nProceed to NEXT STEP: Call select_and_extract_code"
+    ctx.deps.extracted_code = [code_1, code_2, code_3]
+    print("  ✓ Extracted all 3 code examples")
+    return "Extracted 3 code examples. Next: tweak_code"
 
 @agent.tool
-def select_and_extract_code(ctx: RunContext[LLMState]) -> str:
-    """
-    Step 2: From the selected issues, extract the code examples.
-    Use web_fetch to visit each issue URL and extract the Python code examples.
+def tweak_code(ctx: RunContext[LLMState], 
+               tweaked_1: str, tweaked_2: str, tweaked_3: str,
+               strategy_1: str, strategy_2: str, strategy_3: str) -> str | ToolDenied:
+    """Provide 3 tweaked versions using strategies from system prompt."""
+    print(f"\n{'='*60}")
+    print(f"🔧 TOOL: tweak_code (Attempt {ctx.deps.attempt_count + 1})")
+    print(f"{'='*60}")
     
-    After extracting, call evaluate_extracted_code with your response.
-    """
-    if not ctx.deps.urls_visited:
-        return "ERROR: Must visit URLs and pass evaluation first. Call visit_issue_trackers."
+    if not ctx.deps.extracted_code:
+        print("  ❌ ERROR: No extracted code")
+        return ToolDenied("Must extract code first. Call extract_code.")
     
-    return f"""Use web_fetch to visit these issue URLs and extract Python code:
+    ctx.deps.tweaked_code = [tweaked_1, tweaked_2, tweaked_3]
+    ctx.deps.attempt_count += 1
     
-    {chr(10).join(ctx.deps.selected_issues)}
+    print(f"  Strategy 1: {strategy_1}")
+    print(f"  Strategy 2: {strategy_2}")
+    print(f"  Strategy 3: {strategy_3}")
     
-    For EACH issue, find the Python code example and return in this format:
+    print(f"\n  Example 1 preview:")
+    print(f"  {tweaked_1[:150]}...")
+    print(f"\n  Example 2 preview:")
+    print(f"  {tweaked_2[:150]}...")
+    print(f"\n  Example 3 preview:")
+    print(f"  {tweaked_3[:150]}...")
     
-    ISSUE: [URL]
-    CODE:
-```python
-    [code here]
-```
+    print(f"\n  ✓ Created 3 tweaked examples")
     
-    ---
-    
-    After extracting all code, IMMEDIATELY call evaluate_extracted_code with your response."""
+    return f"""Tweaked 3 examples (attempt {ctx.deps.attempt_count}):
+- Example 1: {strategy_1}
+- Example 2: {strategy_2}
+- Example 3: {strategy_3}
+
+Next: run_type_checkers"""
 
 @agent.tool
-def evaluate_extracted_code(ctx: RunContext[LLMState], extracted_code: str) -> str:
-    """
-    Evaluator for select_and_extract_code.
-    Checks if valid Python code was extracted.
+def run_type_checkers(ctx: RunContext[LLMState]) -> str | ToolDenied:
+    """Run mypy, pyrefly, ty, and zuban on each example using bash_tool.
     
-    Pass the exact output from select_and_extract_code to this function.
-    """
-    # Check for code blocks
-    code_blocks = re.findall(r'```python\n(.*?)```', extracted_code, re.DOTALL)
+    FOR EACH EXAMPLE:
+    1. bash_tool: cat > /tmp/test_N.py << 'EOF'
+       [code]
+       EOF
+    2. bash_tool: mypy /tmp/test_N.py 2>&1
+    3. bash_tool: pyrefly check /tmp/test_N.py 2>&1
+    4. bash_tool: ty check /tmp/test_N.py 2>&1
+    5. bash_tool: zuban check /tmp/test_N.py 2>&1
     
-    if len(code_blocks) < 3:
-        return f"EVALUATION FAILED: Need at least 3 code examples. Found {len(code_blocks)}. Call select_and_extract_code again to extract more."
+    Total: 15 bash_tool calls (3 files + 12 checker runs)
+    Then call check_for_disagreements with all 12 outputs."""
     
-    # Check if code blocks are not empty and contain actual Python code
-    non_empty = []
-    for code in code_blocks:
-        stripped = code.strip()
-        # Basic check: should have at least one Python keyword or structure
-        if stripped and any(keyword in stripped for keyword in ['def ', 'class ', 'import ', ':', '=', 'if ', 'for ', 'while ', 'return']):
-            non_empty.append(stripped)
+    print(f"\n{'='*60}")
+    print("🔧 TOOL: run_type_checkers")
+    print(f"{'='*60}")
     
-    if len(non_empty) < 3:
-        return f"EVALUATION FAILED: Need at least 3 valid Python code blocks. Found {len(non_empty)}. Extract actual Python code."
+    if not ctx.deps.tweaked_code:
+        print("  ❌ ERROR: No tweaked code")
+        return ToolDenied("Must tweak code first. Call tweak_code.")
     
-    # Evaluation passed
-    ctx.deps.issues_selected = True
-    ctx.deps.code_examples = non_empty
-    return f"✓ EVALUATION PASSED: Extracted {len(non_empty)} valid code examples.\n\nProceed to NEXT STEP: Call tweak_code_examples"
+    print("  ⚠️  Agent must now use bash_tool 15 times:")
+    print("      - 3 file creations (cat > /tmp/test_N.py)")
+    print("      - 12 type checker runs (mypy, pyrefly, ty, zuban)")
+    print("  ⚠️  Watch for bash_tool calls below...")
+    
+    return f"""Run type checkers on {len(ctx.deps.tweaked_code)} examples.
+Use bash_tool to create files and run: mypy, pyrefly, ty, zuban
+Then call check_for_disagreements."""
 
 @agent.tool
-def tweak_code_examples(ctx: RunContext[LLMState]) -> str:
-    """
-    Step 3: Tweak the code examples to create STRONG type checker disagreements.
+def check_for_disagreements(ctx: RunContext[LLMState],
+                            ex1_mypy: str, ex1_pyrefly: str, ex1_ty: str, ex1_zuban: str,
+                            ex2_mypy: str, ex2_pyrefly: str, ex2_ty: str, ex2_zuban: str,
+                            ex3_mypy: str, ex3_pyrefly: str, ex3_ty: str, ex3_zuban: str) -> str:
+    """Check if at least one checker gives different results."""
+    print(f"\n{'='*60}")
+    print("🔧 TOOL: check_for_disagreements")
+    print(f"{'='*60}")
     
-    GOAL: Make some type checkers report "no issues" while others report errors.
-    The more type checkers that disagree, the better!
-    
-    After tweaking, call evaluate_tweaked_code with your response.
-    """
-    if not ctx.deps.issues_selected:
-        return "ERROR: Must extract code examples first. Call select_and_extract_code."
-    
-    return f"""You have {len(ctx.deps.code_examples)} code examples to tweak.
-    
-    For EACH example, modify it to create MAXIMUM disagreement between type checkers:
-    - GOAL: Some checkers should find NO ERRORS (pass)
-    - GOAL: Other checkers should find ERRORS (fail)
-    - Exploit edge cases in type inference, generics, unions, protocols, etc.
-    
-    Format for EACH example:
-    
-    EXAMPLE 1:
-    ORIGINAL ISSUE: [URL from {ctx.deps.selected_issues[0] if ctx.deps.selected_issues else 'N/A'}]
-    TWEAKED CODE:
-```python
-    [modified code that will cause disagreements]
-```
-    TWEAKING STRATEGY: [Explain what you changed and WHY it causes disagreement]
-    EXPECTED: Some checkers pass, some fail
-    
-    ---
-    
-    Do this for ALL {len(ctx.deps.code_examples)} examples.
-    Then IMMEDIATELY call evaluate_tweaked_code with your response."""
-
-@agent.tool
-def evaluate_tweaked_code(ctx: RunContext[LLMState], tweaked_output: str) -> str:
-    """
-    Evaluator for tweak_code_examples.
-    Checks if code was actually modified and explanations provided.
-    
-    Pass the exact output from tweak_code_examples to this function.
-    """
-    # Check for tweaked code blocks
-    tweaked_blocks = re.findall(r'TWEAKED CODE:\s*```python\n(.*?)```', tweaked_output, re.DOTALL)
-    
-    if len(tweaked_blocks) < 3:
-        return f"EVALUATION FAILED: Need at least 3 tweaked examples. Found {len(tweaked_blocks)}. Call tweak_code_examples again."
-    
-    # Check for tweaking strategy explanations
-    strategy_count = len(re.findall(r'TWEAKING STRATEGY:', tweaked_output))
-    
-    if strategy_count < 3:
-        return "EVALUATION FAILED: Must explain TWEAKING STRATEGY for each example. Call tweak_code_examples again."
-    
-    # Check for expected disagreement mentions
-    expected_count = len(re.findall(r'EXPECTED:', tweaked_output))
-    
-    if expected_count < 3:
-        return "EVALUATION FAILED: Must state EXPECTED disagreement for each example. Call tweak_code_examples again."
-    
-    # Evaluation passed
-    ctx.deps.code_tweaked = True
-    return f"✓ EVALUATION PASSED: {len(tweaked_blocks)} examples tweaked with strategies.\n\nProceed to NEXT STEP: Call run_type_checkers"
-
-@agent.tool
-def run_type_checkers(ctx: RunContext[LLMState]) -> str:
-    """
-    Step 4: Run mypy, pyrefly, ty, and zuban on EACH tweaked example.
-    
-    For each example:
-    1. Save code to a .py file
-    2. Run each type checker
-    3. Capture outputs
-    
-    After running all checkers, call evaluate_type_checker_results with your response.
-    """
-    if not ctx.deps.code_tweaked:
-        return "ERROR: Must tweak code first. Call tweak_code_examples."
-    
-    return """For EACH tweaked example, run ALL 4 type checkers.
-    
-    Use bash commands:
-    1. echo 'code' > temp_example.py
-    2. mypy temp_example.py
-    3. pyrefly temp_example.py (or pyright if pyrefly not available)
-    4. ty check temp_example.py
-    5. zuban check temp_example.py (or pyre if zuban not available)
-    
-    Format for EACH example:
-    
-    EXAMPLE 1:
-    CODE:
-```python
-    [tweaked code]
-```
-    
-    MYPY OUTPUT:
-    [exact output]
-    
-    PYREFLY OUTPUT:
-    [exact output]
-    
-    TY OUTPUT:
-    [exact output]
-    
-    ZUBAN OUTPUT:
-    [exact output]
-    
-    DISAGREEMENT ANALYSIS: [How many passed vs failed]
-    
-    ---
-    
-    Then IMMEDIATELY call evaluate_type_checker_results with your response."""
-
-@agent.tool
-def evaluate_type_checker_results(ctx: RunContext[LLMState], results: str) -> str:
-    """
-    Evaluator for run_type_checkers.
-    Checks if type checkers were run and there are REAL disagreements.
-    
-    DISAGREEMENT = Some checkers say "no issues" while others report errors.
-    STRONG disagreement = 3 or 4 different outputs among the checkers.
-    
-    Pass the exact output from run_type_checkers to this function.
-    """
-    # Check for all type checker outputs
-    checkers = ['MYPY OUTPUT:', 'PYREFLY OUTPUT:', 'TY OUTPUT:', 'ZUBAN OUTPUT:']
-    
-    for checker in checkers:
-        count = results.count(checker)
-        if count < 3:
-            return f"EVALUATION FAILED: {checker} must appear at least 3 times (once per example). Found {count}. Call run_type_checkers again."
-    
-    # Parse examples and check for disagreements
-    examples = re.split(r'EXAMPLE \d+:', results)[1:]
-    
-    if len(examples) < 3:
-        return "EVALUATION FAILED: Need at least 3 examples with type checker outputs. Call run_type_checkers again."
-    
-    strong_disagreements = 0
-    weak_disagreements = 0
-    no_disagreements = 0
-    
-    for example in examples:
-        outputs = {}
-        for checker in ['MYPY', 'PYREFLY', 'TY', 'ZUBAN']:
-            pattern = rf'{checker} OUTPUT:\s*(.+?)(?=(?:MYPY OUTPUT:|PYREFLY OUTPUT:|TY OUTPUT:|ZUBAN OUTPUT:|DISAGREEMENT ANALYSIS:|EXAMPLE|\Z))'
-            match = re.search(pattern, example, re.DOTALL)
-            if match:
-                output = match.group(1).strip().lower()
-                # Categorize as "pass" or "fail"
-                if any(term in output for term in ['success', 'no issues', 'no error', 'passed', 'no problems']):
-                    outputs[checker] = 'PASS'
-                elif any(term in output for term in ['error', 'warning', 'issue', 'failed', 'found']):
-                    outputs[checker] = 'FAIL'
-                else:
-                    outputs[checker] = output[:50]
+    def categorize(output: str) -> str:
+        """
+        Categorize checker output as PASS or FAIL.
         
-        if len(outputs) < 4:
-            continue
+        PASS patterns (when no errors found):
+        - mypy: "Success: no issues found in 1 source file"
+        - pyrefly: "INFO 0 errors"
+        - zuban: "Success: no issues found in 1 source file"
+        - ty: "All checks passed!"
         
-        # Count unique outputs
-        unique_outputs = len(set(outputs.values()))
+        Anything else = FAIL (errors found)
+        """
+        output_lower = output.lower() # lowering the output of the type checkers
         
-        # Check if there's a mix of PASS and FAIL
-        has_pass = 'PASS' in outputs.values()
-        has_fail = 'FAIL' in outputs.values()
+        # Known PASS patterns
+        pass_patterns = [
+            'success: no issues found',  # mypy, zuban
+            'info 0 errors',              # pyrefly
+            'all checks passed',          # ty
+        ]
         
-        if has_pass and has_fail:
-            if unique_outputs >= 3:
-                strong_disagreements += 1
-            else:
-                weak_disagreements += 1
-        else:
-            no_disagreements += 1
+        # If output matches any PASS pattern → PASS
+        for pattern in pass_patterns:
+            if pattern in output_lower:
+                return 'PASS'
+        
+        # Anything else → FAIL
+        return 'FAIL'
     
-    total_examples = len(examples)
+    examples = [
+        (ex1_mypy, ex1_pyrefly, ex1_ty, ex1_zuban),
+        (ex2_mypy, ex2_pyrefly, ex2_ty, ex2_zuban),
+        (ex3_mypy, ex3_pyrefly, ex3_ty, ex3_zuban),
+    ]
     
-    if strong_disagreements == 0 and weak_disagreements == 0:
-        return f"EVALUATION FAILED: No disagreements found in {total_examples} examples. All type checkers agree. Call tweak_code_examples again with more aggressive modifications."
-    
-    if strong_disagreements < 2:
-        return f"EVALUATION WEAK: Only {strong_disagreements} strong disagreements. Need at least 2. Call tweak_code_examples again to create stronger disagreements."
-    
-    # Evaluation passed
-    ctx.deps.type_checkers_run = True
-    ctx.deps.type_checker_outputs = {
-        'strong': strong_disagreements,
-        'weak': weak_disagreements,
-        'none': no_disagreements,
-        'results': results
+    ctx.deps.checker_outputs = {
+        'ex1': examples[0],
+        'ex2': examples[1],
+        'ex3': examples[2],
     }
     
-    return f"""✓ EVALUATION PASSED! 
-    - Strong disagreements: {strong_disagreements} (mix of pass/fail with 3+ different outputs)
-    - Weak disagreements: {weak_disagreements} (some pass, some fail)
-    - No disagreements: {no_disagreements}
+    disagreement_count = 0
+    details = []
     
-    Proceed to FINAL STEP: Call provide_final_output"""
+    print("\n  Analyzing results:")
+    
+    for i, (mypy, pyrefly, ty, zuban) in enumerate(examples, 1):
+        results = {
+            'mypy': categorize(mypy),
+            'pyrefly': categorize(pyrefly),
+            'ty': categorize(ty),
+            'zuban': categorize(zuban),
+        }
+        
+        unique = set(results.values())
+        
+        if len(unique) > 1:
+            disagreement_count += 1
+            print(f"  Example {i}: ✓ DISAGREEMENT")
+            print(f"    mypy={results['mypy']}, pyrefly={results['pyrefly']}, ty={results['ty']}, zuban={results['zuban']}")
+            details.append(f"Example {i}: DISAGREEMENT ✓ - {results}")
+        else:
+            print(f"  Example {i}: ✗ AGREEMENT")
+            print(f"    All checkers: {list(results.values())[0]}")
+            details.append(f"Example {i}: AGREEMENT ✗ - {results}")
+    
+    print(f"\n  {'='*60}")
+    print(f"  Total disagreements: {disagreement_count}/3")
+    print(f"  {'='*60}")
+    
+    if disagreement_count < 2:
+        print("  ⚠️  INSUFFICIENT! Need at least 2 disagreements")
+        print("  ⚠️  Will retry with different strategies...")
+        return f"""INSUFFICIENT DISAGREEMENTS! Only {disagreement_count}/3.
+
+{chr(10).join(details)}
+
+Attempt {ctx.deps.attempt_count}/5. Try DIFFERENT strategies. Call tweak_code again."""
+    
+    print("  ✓ SUCCESS! Enough disagreements found")
+    print("  ✓ Proceeding to final report...")
+    return f"SUCCESS! Found {disagreement_count} disagreements.\n{chr(10).join(details)}\n\nNext: generate_final_report"
 
 @agent.tool
-def provide_final_output(ctx: RunContext[LLMState]) -> str:
-    """
-    Step 5: Provide the final formatted output with all details.
-    Include only examples with disagreements.
-    """
-    if not ctx.deps.type_checkers_run:
-        return "ERROR: Must run type checkers first. Call run_type_checkers."
+def generate_final_report(ctx: RunContext[LLMState]) -> str | ToolDenied:
+    """Generate final formatted report."""
+    print(f"\n{'='*60}")
+    print("🔧 TOOL: generate_final_report")
+    print(f"{'='*60}")
     
-    stats = ctx.deps.type_checker_outputs
+    if not ctx.deps.checker_outputs:
+        print("  ❌ ERROR: No checker outputs")
+        return ToolDenied("Must run check_for_disagreements first.")
     
-    return f"""Create final formatted output:
+    print("  ✓ Generating final report...")
     
-    ============================================================
-    TYPE CHECKER DISAGREEMENT REPORT
-    ============================================================
+    def categorize(output: str) -> str:
+        """Categorize output for display."""
+        output_lower = output.lower()
+        
+        pass_patterns = [
+            'success: no issues found',
+            'info 0 errors',
+            'all checks passed',
+        ]
+        
+        for pattern in pass_patterns:
+            if pattern in output_lower:
+                return '✓ PASS'
+        
+        return '✗ FAIL'
     
-    Summary:
-    - Strong Disagreements: {stats['strong']}
-    - Weak Disagreements: {stats['weak']}
-    - Total Examples Tested: {stats['strong'] + stats['weak'] + stats['none']}
+    results = []
+    results.append("\n" + "="*80)
+    results.append("TYPE CHECKER DISAGREEMENT REPORT")
+    results.append("="*80)
     
-    For EACH example with disagreement, show:
+    disagreement_count = 0
     
-    EXAMPLE N:
-    Original Issue: [GitHub URL]
+    for i in range(1, 4):
+        ex_key = f'ex{i}'
+        mypy, pyrefly, ty, zuban = ctx.deps.checker_outputs[ex_key]
+        
+        results.append(f"\n{'='*80}")
+        results.append(f"EXAMPLE {i}")
+        results.append(f"{'='*80}")
+        results.append(f"\nOriginal Issue: {ctx.deps.found_issues[i-1]}")
+        results.append(f"\nCode:")
+        results.append(f"```python")
+        results.append(ctx.deps.tweaked_code[i-1])
+        results.append(f"```")
+        results.append(f"\nType Checker Results:")
+        results.append(f"\n  MYPY: {categorize(mypy)}")
+        results.append(f"    {mypy[:200]}")
+        results.append(f"\n  PYREFLY: {categorize(pyrefly)}")
+        results.append(f"    {pyrefly[:200]}")
+        results.append(f"\n  TY: {categorize(ty)}")
+        results.append(f"    {ty[:200]}")
+        results.append(f"\n  ZUBAN: {categorize(zuban)}")
+        results.append(f"    {zuban[:200]}")
+        
+        statuses = [categorize(mypy), categorize(pyrefly), categorize(ty), categorize(zuban)]
+        unique = set(statuses)
+        
+        if len(unique) > 1:
+            results.append(f"\n  ✓✓✓ DISAGREEMENT DETECTED ✓✓✓")
+            disagreement_count += 1
+        else:
+            results.append(f"\n  ✗ NO DISAGREEMENT")
     
-    Code:
-```python
-    [tweaked code]
-```
+    results.append("\n" + "="*80)
+    results.append(f"Summary: {disagreement_count}/3 examples show disagreements")
+    results.append(f"Attempts: {ctx.deps.attempt_count}")
+    results.append("="*80)
     
-    Type Checker Results:
-    ✓ MYPY: [output - PASS or FAIL with details]
-    ✓ PYREFLY: [output - PASS or FAIL with details]
-    ✓ TY: [output - PASS or FAIL with details]
-    ✓ ZUBAN: [output - PASS or FAIL with details]
+    print(f"  ✓ Report generated successfully!")
     
-    Disagreement Strength: STRONG/WEAK
-    Analysis: [Why this creates disagreement - which checkers disagree and why]
-    
-    ============================================================
-    
-    This is the FINAL output. Task complete!"""
+    return "\n".join(results)
 
 async def main():
-    """Main execution function."""
     state = LLMState()
-    state.initial_prompt = True
     
-    print("Starting Type Checker Disagreement Analysis...")
-    print("=" * 80)
-    
-    # You can use these pre-found issues or let the agent search for new ones
-    prefound_issues = """
-    FOUND ISSUES:
-    - https://github.com/python/mypy/issues/16531
-    - https://github.com/python/mypy/issues/11497
-    - https://github.com/astral-sh/ty/issues/938
-    """
+    print("\n" + "="*80)
+    print("STARTING TYPE CHECKER DISAGREEMENT ANALYSIS")
+    print("="*80 + "\n")
     
     result = await agent.run(
-        f"""Complete ALL 9 steps of the type checker disagreement task:
-        
-        STEP 1: Call visit_issue_trackers (you can use these pre-found issues if helpful: {prefound_issues})
-        STEP 2: Call evaluate_visited_urls
-        STEP 3: Call select_and_extract_code
-        STEP 4: Call evaluate_extracted_code
-        STEP 5: Call tweak_code_examples
-        STEP 6: Call evaluate_tweaked_code
-        STEP 7: Call run_type_checkers
-        STEP 8: Call evaluate_type_checker_results
-        STEP 9: Call provide_final_output
-        
-        Execute EVERY step in order. After EACH function, call its corresponding evaluator.
-        Do NOT skip any steps. Continue until you call provide_final_output.
-        
-        GOAL: Create code examples where some type checkers PASS (no errors) and others FAIL (report errors).
-        The stronger the disagreement, the better!
-        """,
+        """Complete these steps:
+
+1. Find 3 closed bug issues from 2023-2025
+2. Call find_issues with 3 URLs
+3. Extract code with web_fetch
+4. Call extract_code with 3 examples
+5. Tweak code to cause disagreements
+6. Call tweak_code with 3 examples + 3 strategies
+7. Run bash_tool on EACH example (15 total calls)
+8. Call check_for_disagreements with 12 outputs
+9. If < 2 disagreements: go back to step 5
+10. Call generate_final_report
+11. Return the full report
+
+CRITICAL: In step 7, actually use bash_tool for each example.""",
         deps=state
     )
     
-    print("\n" + "=" * 80)
-    print("FINAL RESULT:")
-    print("=" * 80)
+    print("\n\n" + "="*80)
+    print("EXECUTION COMPLETE")
+    print("="*80)
+    print(f"\nFinal Attempts: {state.attempt_count}")
+    print(f"Issues Found: {len(state.found_issues)}")
+    print(f"Code Examples: {len(state.tweaked_code)}")
+    
+    if state.found_issues:
+        print("\nIssue URLs:")
+        for i, url in enumerate(state.found_issues, 1):
+            print(f"  {i}. {url}")
+    
+    print("\n" + "="*80)
+    print("FINAL REPORT")
+    print("="*80)
     print(result.output)
-    
-    print("\n" + "=" * 80)
-    print("EXECUTION STATE:")
-    print("=" * 80)
-    print(f"URLs Visited: {state.urls_visited}")
-    print(f"Issues Selected: {state.issues_selected}")
-    print(f"Code Tweaked: {state.code_tweaked}")
-    print(f"Type Checkers Run: {state.type_checkers_run}")
-    print(f"Selected Issues: {state.selected_issues}")
-    
-    if state.type_checker_outputs:
-        print(f"\nDisagreement Stats:")
-        print(f"  Strong: {state.type_checker_outputs.get('strong', 0)}")
-        print(f"  Weak: {state.type_checker_outputs.get('weak', 0)}")
-        print(f"  None: {state.type_checker_outputs.get('none', 0)}")
 
 if __name__ == "__main__":
     asyncio.run(main())
