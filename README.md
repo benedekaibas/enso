@@ -1,7 +1,3 @@
-# PYtifex
-
-Explore and evaluate the behavior of Python type checkers.
-
 ## What is PYtifex?
 
 PyTifeX is an automated code generation tool for testing and evaluating different Python type checkers.
